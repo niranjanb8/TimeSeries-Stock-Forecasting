@@ -34,4 +34,4 @@ Limitations: Modeling Limitations & Future Improvements
 
 ## Full Report & Code
 
-The complete analysis is available in the [Full Project Report](./Time_Series_Final.pdf), while the underlying data can be found in the [Apple Stock Dataset](./Apple_Stock.csv). For the raw code file, this can be found in the [Raw Code File](./Time_Series_Raw_Code.rmd).
+The complete analysis is available in the [Full Project Report](./Time_Series_Final.pdf), while the underlying data can be found in the [Apple Stock Dataset](./Apple_Stock.csv). For the raw code file, this can be found in the [Raw Code File](./Time_Series_Raw_Code.Rmd).
