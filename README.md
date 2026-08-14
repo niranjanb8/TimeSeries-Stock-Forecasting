@@ -27,7 +27,7 @@ Limitations: Modeling Limitations & Future Improvements
 ## Key Findings
 
 - Identified initial ARIMA(1, 0, 0) time-series structure in historical Apple stock prices.
-- Selected model based on AIC, BIC, and AICc scores and residual diagnostics.
+- Selected model based on AIC, BIC, AICc scores and residual diagnostics.
 - Found evidence of conditional heteroskedasticity, motivating exploration of ARCH & GARCH modeling to capture changing volatility.
 - Determined ARIMA(1, 0, 0) + GARCH(1, 1) time-series structure as final model.
 - Forecasted Apple stock performance over a 20-month horizon
