@@ -1,0 +1,303 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Introduction and Motivation
+
+Apple is one of the most influential and defining companies of our generation. Founded in 1976 by budding industrialists Steve Jobs and Steve Wozniak, Apple spent much of its earlier years with a focus on computer and physical hardware development. In 2007, Apple shifted its focus towards the handheld consumer electronic space with the launch of the IPhone. In the years that followed, a new era of "big technology" appeared - the perception of digital communication and consumption of information was forever changed. 
+
+Today, Apple remains at the forefront of the technology industry, expanding its presence across the wearables, tablets, and accessories spaces while continuing to be an industry leader in computer & smartphone development, system AI integration, and ecosystem strategy.
+
+It is this continued innovation that makes Apple's stock-analysis particularly exciting. Beyond the groundbreaking tech launches and ecosystem updates, is there a hidden, underlying process that fuels Apple stock performance? Additionally, Apple's exposure to major macroeconomic events and dynamic investor expectations over its financial lifetime makes its stock a compelling time-series candidate. In this paper, we will explore Apple stock analysis from a time-series perspective, studying temporal dependencies, seasonal patterns, and forecasting efforts using monthly-adjusted closing prices.  
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+library(astsa)
+library(tidyverse)
+library(xts)
+
+apple_data <- read.csv("Apple_Stock.csv")
+
+apple_data_final <- apple_data |> select(date, adj_close) |> slice(-1)
+
+apple_data_final$adj_close <- as.numeric(apple_data_final$adj_close)
+
+apple_data_final$date <- as.Date(apple_data_final$date)
+
+apple_data_xts <- xts(apple_data_final["adj_close"], order.by = apple_data_final$date)
+
+apple_data_quarterly <- apply.quarterly(apple_data_xts, FUN = last)
+
+apple_data_monthly <- apply.monthly(apple_data_xts, FUN = last)
+
+apple_data_ts <- ts(apple_data_quarterly, start = c(1980, 4), frequency = 4)
+
+apple_data_month <- ts(apple_data_monthly, start = c(1980, 12), frequency = 12)
+
+```
+
+# Data Collection
+
+Stock-price data was obtained from a publicly-available Kaggle Dataset. A filtered dataset was obtained by grouping observations by month, and extracting the adjusted close stock price at the end of each month.
+
+A link to the data is provided here: https://www.kaggle.com/datasets/muhammadatiflatif/apple-complete-stocks-datasetall-the-time
+
+# Exploratory Analysis
+
+```{r}
+
+tsplot(apple_data_month, main = "Monthly-Adjusted Closing Price vs. Time", 
+       xlab = "Time", ylab = "Monthly-Adjusted Closing Price", col = "blue")
+
+```
+
+As we model the Monthly-Adjusted Closing Price through time, a clear exponential pattern appears to be exhibited. The rapid rise trend in stock price seems to "begin" roughly around 2010, which corresponds to the time period immediately after the first IPhone launch. 
+
+In order to model a time-series effectively, two important assumptions need to be satisfied:
+
+Stationarity: The time-series has a constant mean.
+Homoskedasticity: The variance of the time-series remains constant through time.
+
+In the plot above, both of these assumptions are violated. Hence, transformations need to be undertaken in order to turn the original time series into an "analysis-ready" version.
+
+
+```{r}
+
+tsplot(diff(apple_data_month), main = 
+         "Monthly-Adjusted Closing Price vs. Time (Differenced)", xlab = "Time", 
+       ylab = "Monthly-Adjusted Closing Price", col = "blue")
+tsplot(log(apple_data_month), main = 
+         "Monthly-Adjusted Closing Price vs. Time (Logged)", xlab = "Time", 
+       ylab = "Monthly-Adjusted Closing Price", col = "blue")
+tsplot(diff(log(apple_data_month)), main = 
+         "Monthly-Adjusted Closing Price vs. Time (Differenced & Logged)", 
+       xlab = "Time", ylab = "Monthly-Adjusted Closing Price", col = "blue")
+
+```
+
+In the plots above, 3 different transforming techniques are explored. Differencing and logging was undertaken, but ultimately a combination approach yielded a series better satisfying the homoskedasticity and stationarity assumptions.
+
+
+# ACF and PACF Interpretations
+
+```{r}
+
+apple_data_transformed <- diff(log(apple_data_month))
+
+acf2(apple_data_transformed, main = "Transformed Data")
+
+```
+
+The ACF and PACF plots are designed to show autocorrelation between data points and previous data points at a certain lag distance *h*. The dotted-blue lines are visual indicators showing significance thresholds.
+
+From the plots above, the ACF plot shows ~2 lags that appear to be significant, while the PACF plot shows ~3 lags that appear to be significant. From a cumulative glance, the ACF or PACF plots do not seem to exhibit any tailing or cutting off. 
+
+However, there may be visual representation of a more nuanced underlying process. Significant lags seem to appear at roughly regular time intervals. When treating these rough time intervals as "pseudo time-series", there are some tailing/cutting off patterns exhibited here, suggesting that this series has a seasonality component.
+
+
+# Model Fitting & Diagnostics
+
+First, we will consider the efficacy of simpler models. To begin, AR and MA models will be fit.
+
+
+AR and MA models can be described as such:
+
+AR (Autoregressive Models): Values at a future time *t* can be predicted using a linear combination of previous time values.
+
+MA (Moving Average Models): Values at a future time *t* can be predicted using previous forecast errors (or shocks).
+
+
+AR Models
+
+```{r}
+
+par(mfrow = c(3, 1))
+ar1_model <- sarima(apple_data_transformed, 1, 0, 0)
+ar2_model <- sarima(apple_data_transformed, 2, 0, 0)
+ar3_model <- sarima(apple_data_transformed, 3, 0, 0)
+
+```
+
+AR Model Diagnostics
+
+AR1 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). Most importantly, the p-values described in the Ljung-Box Statistic are all beyond the blue significance threshold depicted, indicating that sufficient de-trending was undertaken. In other words, the model captures the complexities of the data well and does not leave any further complexities unexplained.
+
+AR2 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). The p-values described in the Ljung-Box Statistic are largely beyond the blue significance threshold depicted, with a couple points right on the threshold. For the most part, this indicates that sufficient de-trending was undertaken. The model captures the complexities of the data largely well and does not leave any further complexities unexplained.
+
+AR3 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). However, several p-values described in the Ljung-Box Statistic lie on or below the blue threshold depicted, indicating that insufficient de-trending was undertaken. In other words, the model captures some of the complexities of the data, but leaves further complexities unexplained.
+
+
+
+MA Models
+
+```{r}
+
+par(mfrow = c(3, 1))
+ma1_model <- sarima(apple_data_transformed, 0, 0, 1)
+ma2_model <- sarima(apple_data_transformed, 0, 0, 2)
+ma3_model <- sarima(apple_data_transformed, 0, 0, 3)
+
+```
+
+MA Model Diagnostics:
+
+MA1 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). Most importantly, the p-values described in the Ljung-Box Statistic are all beyond the blue significance threshold depicted, indicating that sufficient de-trending was undertaken. In other words, the model captures the complexities of the data well and does not leave any further complexities unexplained.
+
+MA2 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). The p-values described in the Ljung-Box Statistic are largely beyond the blue significance threshold depicted, with a couple points right on the threshold. For the most part, this indicates that sufficient de-trending was undertaken. The model captures the complexities of the data largely well and does not leave any further complexities unexplained.
+
+MA3 Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). However, several p-values described in the Ljung-Box Statistic lie on or below the blue threshold depicted, indicating that insufficient de-trending was undertaken. In other words, the model captures some of the complexities of the data, but leaves further complexities unexplained.
+
+
+Ironically, we see that the more complex models in both the AR and MA case actually fit more *poorly* than the simpler models. From above, we clearly see that the AR1 and MA1 models outshine the rest in terms of fit.
+
+
+
+We will now proceed to fitting ARMA models. An ARMA model can be described as such:
+
+ARMA (Autoregressive and Moving Average Model): Values at a future time *t* can be predicted using a linear combination of previous time values and previous forecast shocks.
+
+
+ARMA Models
+
+```{r}
+arma1_model <- sarima(apple_data_transformed, 1, 0, 1)
+```
+
+```{r}
+arma2_model <- sarima(apple_data_transformed, 2, 0, 2)
+```
+
+```{r}
+arma21_model <- sarima(apple_data_transformed, 2, 0, 1)
+```
+
+```{r}
+arma12_model <- sarima(apple_data_transformed, 1, 0, 2)
+```
+
+
+ARMA Model Diagnostics:
+
+ARMA (1, 1) Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). The p-values described in the Ljung-Box Statistic are all beyond the blue significance threshold depicted, except for a couple. This indicates that sufficient de-trending was undertaken. In other words, the model captures the complexities of the data largely well and does not leave any further complexities unexplained.
+
+ARMA (2, 2) Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). However, many p-values described in the Ljung-Box Statistic lie on or below the blue threshold depicted, indicating that insufficient de-trending was undertaken. In other words, the model captures some of the complexities of the data, but leaves further complexities unexplained.
+
+ARMA (2, 1) Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). However, several p-values described in the Ljung-Box Statistic lie on or below the blue threshold depicted, indicating that insufficient de-trending was undertaken. In other words, the model captures some of the complexities of the data, but leaves further complexities unexplained.
+
+ARMA (1, 2) Model: The standardized residuals appear to roughly follow the rules of stationarity and constant variance. The ACF plot does not show any consistently significant lags, and the Normal-QQ plot show the errors following the line of normality well (barring some deviation in the tails). However, several p-values described in the Ljung-Box Statistic lie on or below the blue threshold depicted, indicating that insufficient de-trending was undertaken. In other words, the model captures some of the complexities of the data, but leaves further complexities unexplained.
+
+
+From the following, the ARMA(1, 1) Model fits the data best. 
+
+
+# Model Selection
+
+From the previous section, we have found the the AR1, AR2, MA1, MA2, and ARMA(1, 1) models to fit the data best. In regards to comparing model fit against one another, we turn to another fit assessment: AIC (Akaike Information Criteria), AICc (Corrected Akaike Information Criteria), and BIC (Bayesian Information Crtieria).
+
+These selection criteria attempt to define the tradeoff between model fit and model complexity. In other words, they answer the question, *is the improvement in fit worth the additional complexity?* AIC, AICc, and BIC all reward models for an improvement in fit, but penalize additional complexity required to do so. Hence, a lower AIC, AICc, and/or BIC score is designed to reflect a "better" model.
+
+```{r}
+
+final_IC_result <- data.frame(rbind(ar1_model$ICs, ar2_model$ICs, ar3_model$ICs, 
+                                    ma1_model$ICs, ma2_model$ICs, ma3_model$ICs, 
+                                    arma1_model$ICs, arma2_model$ICs, 
+                                    arma21_model$ICs, arma12_model$ICs))
+
+rownames(final_IC_result) <- c("AR1 Model", "AR2 Model", "AR3 Model", 
+                               "MA1 Model", "MA2 Model", "MA3 Model", 
+                               "ARMA(1, 1) Model", "ARMA(2, 2) Model", 
+                               "ARMA(2, 1) Model", "ARMA(1, 2) Model")
+
+colnames(final_IC_result) <- c("AIC Score", "AICc Score", "BIC Score")
+
+final_IC_result
+
+```
+
+
+By comparing the AIC, AICc and BIC scores between all 5 models, the AR1 model (though marginally so) appears to have the lowest cumulative values, indicating that this is the best fitting model.
+
+
+# Addressing Potential Heteroskedasticity
+
+In earlier model diagnostic plots, we affirmed that the standardized residuals of these models appear to roughly satisfy the rules of stationarity and constant variance. While the residuals look to be concretely stationary, constant variance is more of a rough visual estimation. Is that variance *truly* constant over time, exhibiting homoskedasticity?
+
+The ACF plot of the squared residuals provides us with an accurate assessment of constant variance. If no significant lags exist, the standardized residuals can be affirmed as having constant variance.
+
+```{r}
+apple_arima_resid <- sarima(apple_data_transformed, 1, 0, 0, details = FALSE)$fit$resid
+
+acf2(apple_arima_resid^2, main = "Series: Squared Model Residuals")
+
+```
+
+From the ACF and PACF plots above, there seem to be quite a few lags in both that extend beyond the blue significance thresholds, hence exhibiting notable autocorrelation. 
+
+While the AR1 model sufficiently accounts for the mean structure of the series, the variance component remains unexplained.
+
+
+# Enhancing Model Fit
+
+To account for the additional heteroskedasticity, a GARCH model could optimize the fit. 
+
+GARCH (Generalized Autoregressive Conditional Heteroskedasticity Model): The conditional variance of a time series follows an autoregressive structure, through dependence on previous squared observations and variances.
+
+
+GARCH Models
+
+```{r, message = FALSE, warning = FALSE}
+
+library(fGarch)
+
+apple_garch <- garchFit(~arma(1, 0) + garch(1, 1), data = apple_data_transformed, 
+                        cond.dist = "std", trace = FALSE)
+
+summary(apple_garch)
+
+```
+
+We will assess the model fit by looking at the results of the Standardized Residuals Tests. When testing at an alpha level of 0.05, all of the Ljung-Box Test values are far greater than this significance cutoff. Additionally, the LM Arch Test statistic is greater than the chosen alpha level, indicating that there is no evidence of heteroskedasticity remaining in the residuals of the GARCH model.
+
+Hence, we can determine that the optimal model for our data is composed of two parts: an AR1 component for the mean, and a GARCH(1, 1) component for the variance. The final model can be described as an AR1 + GARCH(1, 1) model, or, more formally, an ARIMA(1, 0, 0) + GARCH(1, 1) model.
+
+
+# Forecasting
+
+```{r, echo = FALSE}
+
+final_forecast <- predict(apple_garch, n.ahead = 20, plot = TRUE)
+
+final <- data.frame(cbind(final_forecast$meanForecast, final_forecast$lowerInterval, final_forecast$upperInterval))
+
+colnames(final) <- c("Mean Forecast", "Lower Bound", "Upper Bound")
+
+rownames(final) <- c("May 2025", "June 2025", "July 2025", "August 2025", "September 2025", "October 2025", "November 2025", "December 2025", "January 2026", "February 2026", "March 2026", "April 2026", "May 2026", "June 2026", "July 2026", "August 2026", "September 2026", "October 2026", "November 2026", "December 2026")
+
+final
+
+```
+
+The table above provides Apple's log returns for a forecasting period of 20 months. Due to the fact that the last observable data point was recorded in April 2025, forecasting begins from May 2025.
+
+In essence, this table provides the logged growth or decline rate of Apple stock month-over-month. The *Mean Forecast* column provides the mean estimate, while the *Lower Bound* and *Upper Bound* columns provide the prediction confidence interval lower and upper bounds, respectively.
+
+These predictions can be used in a variety of contexts, including portfolio management, broader national economic reasoning, and corporate planning, among others.
+
+
+# Limitations
+
+While the approaches designed above are robust and defensible, certain limitations still exist. To start with, stocks & financial markets are undoubtedly volatile. The performance of a stock could be dependent on many extraneous factors, some of which are simply not quantifiable.
+
+The modeling methodology mentioned above treats Apple's log return forecasting as a function of its previous AR and GARCH components. However, it is entirely possible that Apple's log return forecasting could yield better predictions as being a function of its previous AR and GARCH components, as well as the ARIMA, SARIMA, and/or GARCH components of *other* variable time-series. In other words, Apple's log return could be better modeled as a function of itself and other variable time-series.
+
+For this, a VAR (Vector Autoregressive Model) would be optimal. Although choosing a good "predictor set" of time-series would take time and effort, this approach could theoretically improve forecasting performance as extraneous factors are now being addressed.
+
+In regards to model fitting, a time-series approach was used throughout this paper. However, more robust approaches, such as supervised machine learning and deep learning, could yield better model fitting performance. While predictor dimensionality would be quite large (time-dependence would need to be translated into lagged predictors), these approaches would theoretically capture even more hidden complexities in the data.
+
+
+\newpage
+
+# References
+
+Shumway, R. H., & Stoffer, D. S. (2025). Time series analysis and its applications: With R examples (5th ed.). Springer.
